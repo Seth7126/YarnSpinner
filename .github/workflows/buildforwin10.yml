@@ -35,13 +35,12 @@ jobs:
       - name: Test  
         run: dotnet test --no-build --configuration Release --verbosity normal  
   
-      # 新增：发布为 Windows 10 x64 自包含单文件可执行程序  
       - name: Publish for Windows 10 (x64)  
-        run: dotnet publish YarnSpinner.LanguageServer/YarnLanguageServer.csproj --configuration Release --runtime win10-x64 --self-contained true -p:PublishSingleFile=true -p:UseAppHost=true --output ./publish/win10-x64  
+        run: dotnet publish "$GITHUB_WORKSPACE/YarnSpinner.LanguageServer/YarnLanguageServer.csproj" --configuration Release --runtime win10-x64 --self-contained true -p:PublishSingleFile=true -p:UseAppHost=true --output "$GITHUB_WORKSPACE/publish/win10-x64"  
   
       - name: Upload Windows artifact  
         uses: actions/upload-artifact@v4  
         with:  
           name: YarnLanguageServer-win10-x64  
-          path: ./publish/win10-x64/  
+          path: ${{ github.workspace }}/publish/win10-x64/  
           retention-days: 30
