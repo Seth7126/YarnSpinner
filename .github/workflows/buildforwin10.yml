@@ -1,46 +1,53 @@
 name: Build win10-x64 Yarn Spinner  
   
-on:  
-  push:  
-    branches: [main, "feature/**", "release/**"]  
-  pull_request:  
-    branches: [main, "feature/**", "release/**"]  
-  workflow_dispatch:  
-  
-jobs:  
-  build:  
-    runs-on: ubuntu-latest  
-  
-    steps:  
-      - uses: actions/checkout@v4  
-  
-      - name: Setup .NET  
-        uses: actions/setup-dotnet@v4  
-        with:  
-          dotnet-version: 9.0.x  
-  
-      - name: Fetch all commits  
-        run: git fetch --unshallow  
-  
-      - name: Update version  
-        id: version  
-        run: ./get-version.sh  
-  
-      - name: Restore dependencies  
-        run: dotnet restore  
-  
-      - name: Build  
-        run: dotnet build --no-restore --configuration Release  
-  
-      - name: Test  
-        run: dotnet test --no-build --configuration Release --verbosity normal  
-  
-      - name: Publish for Windows 10 (x64)  
-        run: dotnet publish "$GITHUB_WORKSPACE/YarnSpinner.LanguageServer/YarnLanguageServer.csproj" --configuration Release --runtime win10-x64 --self-contained true -p:PublishSingleFile=true -p:UseAppHost=true --output "$GITHUB_WORKSPACE/publish/win10-x64"  
-  
-      - name: Upload Windows artifact  
-        uses: actions/upload-artifact@v4  
-        with:  
-          name: YarnLanguageServer-win10-x64  
-          path: ${{ github.workspace }}/publish/win10-x64/  
+# 本工作流用于在代码推送到指定分支或拉取请求时，自动化构建与测试 Yarn Spinner。
+# 新增的逻辑会在测试完成后，将 YarnSpinner.LanguageServer 目录下的项目
+# 编译为适用于 Windows 10 x64 的自包含单文件可执行程序，
+# 并通过 upload-artifact 动作将生成的目录上传至 GitHub Actions 页面，供开发人员下载获取。
+
+
+on:
+  push:
+    branches: [main, "feature/**", "release/**"]
+  pull_request:
+    branches: [main, "feature/**", "release/**"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+          
+      - name: Fetch all commits
+        run: git fetch --unshallow
+        
+      - name: Update version
+        id: version
+        run: ./get-version.sh
+        
+      - name: Restore dependencies
+        run: dotnet restore
+        
+      - name: Build
+        run: dotnet build --no-restore --configuration Release
+        
+      - name: Test
+        run: dotnet test --no-build --configuration Release --verbosity normal
+        
+      - name: Publish for Windows 10 (x64)
+        # 直接指向 YarnSpinner.LanguageServer/ 目录，让 dotnet 自动寻找 csproj 文件，解决 MSB1009 路径错误
+        # --self-contained true 和 PublishSingleFile=true 确保生成无需额外安装运行时即可运行的单文件程序
+        run: dotnet publish YarnSpinner.LanguageServer/ --configuration Release --runtime win10-x64 --self-contained true -p:PublishSingleFile=true -p:UseAppHost=true --output ./publish/win10-x64
+        
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: YarnLanguageServer-win10-x64
+          path: ./publish/win10-x64/
           retention-days: 30
