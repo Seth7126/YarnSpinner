@@ -6,7 +6,6 @@ on:
       - "*.*.*"  
   workflow_dispatch:  
   
-# 关键修复：显式声明 contents 写权限  
 permissions:  
   contents: write  
   
@@ -40,11 +39,10 @@ jobs:
         run: dotnet test --no-build --configuration Release --verbosity normal  
   
       - name: Publish for Windows 10 (x64)  
-        run: dotnet publish YarnSpinner.LanguageServer/YarnLanguageServer.csproj --configuration Release --runtime win10-x64 --self-contained true -p:PublishSingleFile=true -p:UseAppHost=true --output ./publish/win10-x64  
+        run: dotnet publish "$GITHUB_WORKSPACE/YarnSpinner.LanguageServer/YarnLanguageServer.csproj" --configuration Release --runtime win10-x64 --self-contained true -p:PublishSingleFile=true -p:UseAppHost=true --output "$GITHUB_WORKSPACE/publish/win10-x64"  
   
       - name: Zip Windows artifact  
-        run: zip -r YarnLanguageServer-win10-x64.zip ./publish/win10-x64/
- 
+        run: zip -r "$GITHUB_WORKSPACE/YarnLanguageServer-win10-x64.zip" "$GITHUB_WORKSPACE/publish/win10-x64/"  
   
       - name: Deploy to NuGet  
         if: ${{ startsWith(github.ref, 'refs/tags/v') }}  
@@ -56,12 +54,16 @@ jobs:
         id: extract-release-notes  
         uses: ffurrer2/extract-release-notes@v2  
   
-      # 修复：用 softprops/action-gh-release 替代已废弃的 actions/create-release@v1  
       - name: Create GitHub Release  
         uses: softprops/action-gh-release@v2  
         with:  
           tag_name: ${{ github.ref_name }}  
           name: ${{ github.ref_name }}  
+          draft: true  
+          prerelease: true  
+          body: ${{ steps.extract-release-notes.outputs.release_notes }}  
+          files: ${{ github.workspace }}/YarnLanguageServer-win10-x64.zip
+
           draft: true  
           prerelease: true  
           body: ${{ steps.extract-release-notes.outputs.release_notes }}  
