@@ -1,9 +1,13 @@
 name: Create win10-x64 Release  
-# 本工作流用于在推送包含版本号标签（例如 v1.0.0）时，自动触发正式发布流程。
-# 必须显式声明 contents: write 权限，以授权系统在仓库的 Releases 页面创建新版本。
-# 脚本会依次执行构建、测试、NuGet 包发布，并将适用于 Windows 10 x64 的单文件程序打包为 ZIP，
-# 最终挂载至 GitHub Release 页面作为资产文件供用户直接下载。
-
+# -----------------------------------------------------------------------------
+# 工作流目的说明：
+# 本脚本用于在推送 Tag 标签时自动发布 GitHub Release 并上传编译好的二进制文件与 NuGet 包。
+# 核心修复：
+# 1. 显式声明 permissions: contents: write，赋予 GITHUB_TOKEN 写入权限，直接解决 403 报错拦截。
+# 2. 将弃用的 actions/create-release@v1 替换为主流的 softprops/action-gh-release@v2，
+#    这支持直接在发布过程中将压缩包上传为 Release Asset。
+# 3. 补全了 win-x64 的编译与 zip 打包逻辑，同时还原了原始仓库需要的模板读取拼接步骤。
+# -----------------------------------------------------------------------------
 
 on:
   push:
@@ -11,7 +15,7 @@ on:
       - "*.*.*"
   workflow_dispatch:
 
-# 必须显式赋予写权限，解决 Resource not accessible by integration 的权限拦截问题
+# 这是修复 Resource not accessible 错误的核心越权声明
 permissions:
   contents: write
 
@@ -22,55 +26,65 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        
+
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 9.0.x
-          
+
       - name: Fetch all commits
         run: git fetch --unshallow
-        
+
       - name: Update version
         id: version
         run: ./get-version.sh
-        
+
       - name: Restore dependencies
         run: dotnet restore
-        
+
       - name: Build
         run: dotnet build --no-restore --configuration Release
-        
+
       - name: Test
         run: dotnet test --no-build --configuration Release --verbosity normal
-        
-      - name: Publish for Windows 10 (x64)
-        # 同样直接指向目录以避免 csproj 命名异常，统一输出路径
-        run: dotnet publish YarnSpinner.LanguageServer/ --configuration Release --runtime win10-x64 --self-contained true -p:PublishSingleFile=true -p:UseAppHost=true --output ./publish/win10-x64
-        
+
+      - name: Publish for Windows (x64)
+        run: dotnet publish YarnSpinner.LanguageServer --configuration Release --runtime win-x64 --self-contained true -p:PublishSingleFile=true -p:UseAppHost=true --output publish/win-x64
+
       - name: Zip Windows artifact
-        # 将生成的发布目录递归压缩为 ZIP 文件
-        run: zip -r YarnLanguageServer-win10-x64.zip ./publish/win10-x64/
-        
+        # 将生成的 windows 单文件可执行程序打包进一个干净的压缩包中
+        run: |
+          cd publish/win-x64
+          zip -r ../../YarnLanguageServer-win-x64.zip ./*
+          cd ../../
+
       - name: Deploy to NuGet
         if: ${{ startsWith(github.ref, 'refs/tags/v') }}
         run: |
           dotnet pack -c Release /p:Version=${{ steps.version.outputs.SemVer }} -o "nuget"
           dotnet nuget push nuget/*.nupkg -k ${{ secrets.NUGET_KEY }} -s https://api.nuget.org/v3/index.json
-          
+
       - name: Extract release notes
         id: extract-release-notes
         uses: ffurrer2/extract-release-notes@v2
-        
+
+      - name: Read release notes preface
+        id: release_preface
+        uses: juliangruber/read-file-action@v1
+        with:
+          path: .github/RELEASE_TEMPLATE.md
+
       - name: Create GitHub Release
-        # 替换已废弃的 actions/create-release@v1，使用当前被广泛推荐的 softprops 动作进行发布
-        # 并通过 files 参数将刚才生成的 ZIP 文件作为 Release 的下载内容一并上传
-        # 彻底移除缺失的 RELEASE_TEMPLATE.md 依赖，防止文件找不到而导致流程中断
+        # 使用 v2 版本的 softprops action
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
           name: ${{ github.ref_name }}
           draft: true
           prerelease: true
-          body: ${{ steps.extract-release-notes.outputs.release_notes }}
-          files: YarnLanguageServer-win10-x64.zip
+          # 组合模板正文和变更日志
+          body: |
+            ${{ steps.release_preface.outputs.content }}
+            ${{ steps.extract-release-notes.outputs.release_notes }}
+          # 绑定最终打好的压缩包供下载
+          files: YarnLanguageServer-win-x64.zip
