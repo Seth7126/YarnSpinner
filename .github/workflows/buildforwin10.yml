@@ -1,9 +1,12 @@
 name: Build win10-x64 Yarn Spinner  
-  
-# 本工作流用于在代码推送到指定分支或拉取请求时，自动化构建与测试 Yarn Spinner。
-# 新增的逻辑会在测试完成后，将 YarnSpinner.LanguageServer 目录下的项目
-# 编译为适用于 Windows 10 x64 的自包含单文件可执行程序，
-# 并通过 upload-artifact 动作将生成的目录上传至 GitHub Actions 页面，供开发人员下载获取。
+# -----------------------------------------------------------------------------
+# 工作流目的说明：
+# 本脚本用于 Yarn Spinner 项目的日常构建和测试流程。
+# 核心修复在于新增了 dotnet publish 步骤，并通过直接指定 YarnSpinner.LanguageServer
+# 目录（而非具体文件名）来避免 MSB1009 找不到工程文件的问题。
+# 编译产出采用 win-x64 runtime 并打包为无须外部框架支持的单文件，
+# 最后通过 upload-artifact v4 版本将产出暴露为工作流界面的可下载资源。
+# -----------------------------------------------------------------------------
 
 
 on:
@@ -18,36 +21,35 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 9.0.x
-          
+
       - name: Fetch all commits
         run: git fetch --unshallow
-        
+
       - name: Update version
         id: version
         run: ./get-version.sh
-        
+
       - name: Restore dependencies
         run: dotnet restore
-        
+
       - name: Build
         run: dotnet build --no-restore --configuration Release
-        
+
       - name: Test
         run: dotnet test --no-build --configuration Release --verbosity normal
-        
-      - name: Publish for Windows 10 (x64)
-        # 直接指向 YarnSpinner.LanguageServer/ 目录，让 dotnet 自动寻找 csproj 文件，解决 MSB1009 路径错误
-        # --self-contained true 和 PublishSingleFile=true 确保生成无需额外安装运行时即可运行的单文件程序
-        run: dotnet publish YarnSpinner.LanguageServer/ --configuration Release --runtime win10-x64 --self-contained true -p:PublishSingleFile=true -p:UseAppHost=true --output ./publish/win10-x64
-        
+
+      - name: Publish for Windows (x64)
+        # 直接传递目录名称，绕过手动猜测项目文件全名的问题
+        run: dotnet publish YarnSpinner.LanguageServer --configuration Release --runtime win-x64 --self-contained true -p:PublishSingleFile=true -p:UseAppHost=true --output publish/win-x64
+
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
         with:
-          name: YarnLanguageServer-win10-x64
-          path: ./publish/win10-x64/
+          name: YarnLanguageServer-win-x64
+          path: publish/win-x64/
           retention-days: 30
