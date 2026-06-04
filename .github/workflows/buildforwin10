@@ -1,0 +1,55 @@
+name: Build Yarn Spinner  
+  
+on:  
+  push:  
+    branches: [main, "feature/**", "release/**"]  
+  pull_request:  
+    branches: [main, "feature/**", "release/**"]  
+  workflow_dispatch:  
+  
+jobs:  
+  build:  
+    runs-on: ubuntu-latest  
+  
+    steps:  
+      - uses: actions/checkout@v4  
+  
+      - name: Setup .NET  
+        uses: actions/setup-dotnet@v4  
+        with:  
+          dotnet-version: 9.0.x  
+  
+      - name: Fetch all commits  
+        run: git fetch --unshallow  
+  
+      - name: Update version  
+        id: version  
+        run: ./get-version.sh  
+  
+      - name: Restore dependencies  
+        run: dotnet restore  
+  
+      - name: Build  
+        run: dotnet build --no-restore --configuration Release  
+  
+      - name: Test  
+        run: dotnet test --no-build --configuration Release --verbosity normal  
+  
+      # 新增：发布为 Windows 10 x64 自包含单文件可执行程序  
+      - name: Publish for Windows 10 (x64)  
+        run: |  
+          dotnet publish YarnSpinner.LanguageServer/YarnLanguageServer.csproj \  
+            --configuration Release \  
+            --runtime win10-x64 \  
+            --self-contained true \  
+            -p:PublishSingleFile=true \  
+            -p:UseAppHost=true \  
+            --output ./publish/win10-x64  
+  
+      # 新增：上传构建产物，供 Actions 页面下载  
+      - name: Upload Windows artifact  
+        uses: actions/upload-artifact@v4  
+        with:  
+          name: YarnLanguageServer-win10-x64  
+          path: ./publish/win10-x64/  
+          retention-days: 30
