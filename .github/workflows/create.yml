@@ -1,70 +1,76 @@
 name: Create win10-x64 Release  
-  
-on:  
-  push:  
-    tags:  
-      - "*.*.*"  
-  workflow_dispatch:  
-  
-permissions:  
-  contents: write  
-  
-jobs:  
-  build:  
-    name: Create Release  
-    runs-on: ubuntu-latest  
-    steps:  
-      - name: Checkout  
-        uses: actions/checkout@v4  
-  
-      - name: Setup .NET  
-        uses: actions/setup-dotnet@v4  
-        with:  
-          dotnet-version: 9.0.x  
-  
-      - name: Fetch all commits  
-        run: git fetch --unshallow  
-  
-      - name: Update version  
-        id: version  
-        run: ./get-version.sh  
-  
-      - name: Restore dependencies  
-        run: dotnet restore  
-  
-      - name: Build  
-        run: dotnet build --no-restore --configuration Release  
-  
-      - name: Test  
-        run: dotnet test --no-build --configuration Release --verbosity normal  
-  
-      - name: Publish for Windows 10 (x64)  
-        run: dotnet publish "$GITHUB_WORKSPACE/YarnSpinner.LanguageServer/YarnLanguageServer.csproj" --configuration Release --runtime win10-x64 --self-contained true -p:PublishSingleFile=true -p:UseAppHost=true --output "$GITHUB_WORKSPACE/publish/win10-x64"  
-  
-      - name: Zip Windows artifact  
-        run: zip -r "$GITHUB_WORKSPACE/YarnLanguageServer-win10-x64.zip" "$GITHUB_WORKSPACE/publish/win10-x64/"  
-  
-      - name: Deploy to NuGet  
-        if: ${{ startsWith(github.ref, 'refs/tags/v') }}  
-        run: |  
-          dotnet pack -c Release /p:Version=${{ steps.version.outputs.SemVer }} -o "nuget"  
-          dotnet nuget push nuget/*.nupkg -k ${{ secrets.NUGET_KEY }} -s https://api.nuget.org/v3/index.json  
-  
-      - name: Extract release notes  
-        id: extract-release-notes  
-        uses: ffurrer2/extract-release-notes@v2  
-  
-      - name: Create GitHub Release  
-        uses: softprops/action-gh-release@v2  
-        with:  
-          tag_name: ${{ github.ref_name }}  
-          name: ${{ github.ref_name }}  
-          draft: true  
-          prerelease: true  
-          body: ${{ steps.extract-release-notes.outputs.release_notes }}  
-          files: ${{ github.workspace }}/YarnLanguageServer-win10-x64.zip
+# 本工作流用于在推送包含版本号标签（例如 v1.0.0）时，自动触发正式发布流程。
+# 必须显式声明 contents: write 权限，以授权系统在仓库的 Releases 页面创建新版本。
+# 脚本会依次执行构建、测试、NuGet 包发布，并将适用于 Windows 10 x64 的单文件程序打包为 ZIP，
+# 最终挂载至 GitHub Release 页面作为资产文件供用户直接下载。
 
-          draft: true  
-          prerelease: true  
-          body: ${{ steps.extract-release-notes.outputs.release_notes }}  
+
+on:
+  push:
+    tags:
+      - "*.*.*"
+  workflow_dispatch:
+
+# 必须显式赋予写权限，解决 Resource not accessible by integration 的权限拦截问题
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Create Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+          
+      - name: Fetch all commits
+        run: git fetch --unshallow
+        
+      - name: Update version
+        id: version
+        run: ./get-version.sh
+        
+      - name: Restore dependencies
+        run: dotnet restore
+        
+      - name: Build
+        run: dotnet build --no-restore --configuration Release
+        
+      - name: Test
+        run: dotnet test --no-build --configuration Release --verbosity normal
+        
+      - name: Publish for Windows 10 (x64)
+        # 同样直接指向目录以避免 csproj 命名异常，统一输出路径
+        run: dotnet publish YarnSpinner.LanguageServer/ --configuration Release --runtime win10-x64 --self-contained true -p:PublishSingleFile=true -p:UseAppHost=true --output ./publish/win10-x64
+        
+      - name: Zip Windows artifact
+        # 将生成的发布目录递归压缩为 ZIP 文件
+        run: zip -r YarnLanguageServer-win10-x64.zip ./publish/win10-x64/
+        
+      - name: Deploy to NuGet
+        if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+        run: |
+          dotnet pack -c Release /p:Version=${{ steps.version.outputs.SemVer }} -o "nuget"
+          dotnet nuget push nuget/*.nupkg -k ${{ secrets.NUGET_KEY }} -s https://api.nuget.org/v3/index.json
+          
+      - name: Extract release notes
+        id: extract-release-notes
+        uses: ffurrer2/extract-release-notes@v2
+        
+      - name: Create GitHub Release
+        # 替换已废弃的 actions/create-release@v1，使用当前被广泛推荐的 softprops 动作进行发布
+        # 并通过 files 参数将刚才生成的 ZIP 文件作为 Release 的下载内容一并上传
+        # 彻底移除缺失的 RELEASE_TEMPLATE.md 依赖，防止文件找不到而导致流程中断
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          draft: true
+          prerelease: true
+          body: ${{ steps.extract-release-notes.outputs.release_notes }}
           files: YarnLanguageServer-win10-x64.zip
