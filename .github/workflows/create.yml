@@ -1,0 +1,74 @@
+name: Create win10-x64 Release  
+  
+on:  
+  push:  
+    tags:  
+      - "*.*.*"  
+  workflow_dispatch:  
+  
+# 关键修复：显式声明 contents 写权限  
+permissions:  
+  contents: write  
+  
+jobs:  
+  build:  
+    name: Create Release  
+    runs-on: ubuntu-latest  
+    steps:  
+      - name: Checkout  
+        uses: actions/checkout@v4  
+  
+      - name: Setup .NET  
+        uses: actions/setup-dotnet@v4  
+        with:  
+          dotnet-version: 9.0.x  
+  
+      - name: Fetch all commits  
+        run: git fetch --unshallow  
+  
+      - name: Update version  
+        id: version  
+        run: ./get-version.sh  
+  
+      - name: Restore dependencies  
+        run: dotnet restore  
+  
+      - name: Build  
+        run: dotnet build --no-restore --configuration Release  
+  
+      - name: Test  
+        run: dotnet test --no-build --configuration Release --verbosity normal  
+  
+      - name: Publish for Windows 10 (x64)  
+        run: |  
+          dotnet publish YarnSpinner.LanguageServer/YarnLanguageServer.csproj \  
+            --configuration Release \  
+            --runtime win10-x64 \  
+            --self-contained true \  
+            -p:PublishSingleFile=true \  
+            -p:UseAppHost=true \  
+            --output ./publish/win10-x64  
+  
+      - name: Zip Windows artifact  
+        run: zip -r YarnLanguageServer-win10-x64.zip ./publish/win10-x64/  
+  
+      - name: Deploy to NuGet  
+        if: ${{ startsWith(github.ref, 'refs/tags/v') }}  
+        run: |  
+          dotnet pack -c Release /p:Version=${{ steps.version.outputs.SemVer }} -o "nuget"  
+          dotnet nuget push nuget/*.nupkg -k ${{ secrets.NUGET_KEY }} -s https://api.nuget.org/v3/index.json  
+  
+      - name: Extract release notes  
+        id: extract-release-notes  
+        uses: ffurrer2/extract-release-notes@v2  
+  
+      # 修复：用 softprops/action-gh-release 替代已废弃的 actions/create-release@v1  
+      - name: Create GitHub Release  
+        uses: softprops/action-gh-release@v2  
+        with:  
+          tag_name: ${{ github.ref_name }}  
+          name: ${{ github.ref_name }}  
+          draft: true  
+          prerelease: true  
+          body: ${{ steps.extract-release-notes.outputs.release_notes }}  
+          files: YarnLanguageServer-win10-x64.zip
