@@ -40,17 +40,11 @@ jobs:
         run: dotnet test --no-build --configuration Release --verbosity normal  
   
       - name: Publish for Windows 10 (x64)  
-        run: |  
-          dotnet publish YarnSpinner.LanguageServer/YarnLanguageServer.csproj \  
-            --configuration Release \  
-            --runtime win10-x64 \  
-            --self-contained true \  
-            -p:PublishSingleFile=true \  
-            -p:UseAppHost=true \  
-            --output ./publish/win10-x64  
+        run: dotnet publish YarnSpinner.LanguageServer/YarnLanguageServer.csproj --configuration Release --runtime win10-x64 --self-contained true -p:PublishSingleFile=true -p:UseAppHost=true --output ./publish/win10-x64  
   
       - name: Zip Windows artifact  
-        run: zip -r YarnLanguageServer-win10-x64.zip ./publish/win10-x64/  
+        run: zip -r YarnLanguageServer-win10-x64.zip ./publish/win10-x64/
+ 
   
       - name: Deploy to NuGet  
         if: ${{ startsWith(github.ref, 'refs/tags/v') }}  
