@@ -1,4 +1,4 @@
-name: Build win10-x64 Yarn Spinner  
+name: Build Yarn Spinner (Win x64)
 
 on:
   push:
@@ -19,7 +19,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 9.0.x
+          dotnet-version: 10.0.x
 
       - name: Update version
         id: version
@@ -34,18 +34,20 @@ jobs:
       - name: Test
         run: dotnet test --no-build --configuration Release --verbosity normal
 
-      - name: Publish win10-x64 self-contained
+      - name: Publish win-x64 self-contained
         run: >
-          dotnet publish --configuration Release
-          -r win10-x64
+          dotnet publish
+          --configuration Release
+          -r win-x64
           --self-contained true
           /p:PublishSingleFile=true
           /p:EnableCompressionInSingleFile=true
-          -o ./publish/win10-x64
+          -o ./publish/win-x64
+          YarnSpinner/YarnSpinner.csproj
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: YarnSpinner-win10-x64
-          path: ./publish/win10-x64/
+          name: YarnSpinner-win-x64
+          path: ./publish/win-x64/
           retention-days: 30
