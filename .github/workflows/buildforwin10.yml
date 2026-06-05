@@ -1,4 +1,4 @@
-name: Build Yarn Spinner (Win x64)
+name: Build Yarn Spinner (CI)
 
 on:
   push:
@@ -34,20 +34,21 @@ jobs:
       - name: Test
         run: dotnet test --no-build --configuration Release --verbosity normal
 
-      - name: Publish win-x64 self-contained
-        run: >
-          dotnet publish
-          --configuration Release
-          -r win-x64
-          --self-contained true
-          /p:PublishSingleFile=true
-          /p:EnableCompressionInSingleFile=true
-          -o ./publish/win-x64
-          YarnSpinner/YarnSpinner.csproj
+      - name: Pack NuGet
+        run: dotnet pack -c Release /p:Version=${{ steps.version.outputs.SemVer }} -o ./nuget
 
-      - name: Upload build artifacts
+      - name: Upload NuGet artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: YarnSpinner-win-x64
-          path: ./publish/win-x64/
+          name: YarnSpinner-nupkg
+          path: ./nuget/*.nupkg
+          retention-days: 30
+
+      - name: Upload build binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: YarnSpinner-binaries
+          path: |
+            YarnSpinner/bin/Release/**/*.dll
+            YarnSpinner.Compiler/bin/Release/**/*.dll
           retention-days: 30
