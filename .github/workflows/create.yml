@@ -1,5 +1,4 @@
-name: Create win10-x64 Release  
-
+name: Release Yarn Spinner (Win x64)
 
 on:
   push:
@@ -24,7 +23,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 9.0.x
+          dotnet-version: 10.0.x
 
       - name: Update version
         id: version
@@ -39,19 +38,21 @@ jobs:
       - name: Test
         run: dotnet test --no-build --configuration Release --verbosity normal
 
-      - name: Publish win10-x64 self-contained
+      - name: Publish win-x64 self-contained
         run: >
-          dotnet publish --configuration Release
-          -r win10-x64
+          dotnet publish
+          --configuration Release
+          -r win-x64
           --self-contained true
           /p:PublishSingleFile=true
           /p:EnableCompressionInSingleFile=true
-          -o ./publish/win10-x64
+          -o ./publish/win-x64
+          YarnSpinner/YarnSpinner.csproj
 
       - name: Package artifacts as zip
         run: |
-          cd ./publish/win10-x64
-          zip -r ../../YarnSpinner-win10-x64.zip .
+          cd ./publish/win-x64
+          zip -r ../../YarnSpinner-win-x64.zip .
 
       - name: Deploy to NuGet
         if: ${{ startsWith(github.ref, 'refs/tags/v') }}
@@ -78,6 +79,5 @@ jobs:
             ${{ steps.release_preface.outputs.content }}
             ${{ steps.extract-release-notes.outputs.release_notes }}
           files: |
-            ./YarnSpinner-win10-x64.zip
+            ./YarnSpinner-win-x64.zip
           fail_on_unmatched_files: true
-
