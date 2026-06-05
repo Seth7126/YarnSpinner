@@ -1,39 +1,30 @@
 name: Create win10-x64 Release  
-# -----------------------------------------------------------------------------
-# 工作流目的说明：
-# 本脚本用于在推送 Tag 标签时自动发布 GitHub Release 并上传编译好的二进制文件与 NuGet 包。
-# 核心修复：
-# 1. 显式声明 permissions: contents: write，赋予 GITHUB_TOKEN 写入权限，直接解决 403 报错拦截。
-# 2. 将弃用的 actions/create-release@v1 替换为主流的 softprops/action-gh-release@v2，
-#    这支持直接在发布过程中将压缩包上传为 Release Asset。
-# 3. 补全了 win-x64 的编译与 zip 打包逻辑，同时还原了原始仓库需要的模板读取拼接步骤。
-# -----------------------------------------------------------------------------
+
 
 on:
   push:
     tags:
-      - "*.*.*"
+      - "v*.*.*"
   workflow_dispatch:
 
-# 这是修复 Resource not accessible 错误的核心越权声明
 permissions:
   contents: write
 
 jobs:
-  build:
+  release:
     name: Create Release
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 9.0.x
-
-      - name: Fetch all commits
-        run: git fetch --unshallow
 
       - name: Update version
         id: version
@@ -48,15 +39,19 @@ jobs:
       - name: Test
         run: dotnet test --no-build --configuration Release --verbosity normal
 
-      - name: Publish for Windows (x64)
-        run: dotnet publish YarnSpinner.LanguageServer --configuration Release --runtime win-x64 --self-contained true -p:PublishSingleFile=true -p:UseAppHost=true --output publish/win-x64
+      - name: Publish win10-x64 self-contained
+        run: >
+          dotnet publish --configuration Release
+          -r win10-x64
+          --self-contained true
+          /p:PublishSingleFile=true
+          /p:EnableCompressionInSingleFile=true
+          -o ./publish/win10-x64
 
-      - name: Zip Windows artifact
-        # 将生成的 windows 单文件可执行程序打包进一个干净的压缩包中
+      - name: Package artifacts as zip
         run: |
-          cd publish/win-x64
-          zip -r ../../YarnLanguageServer-win-x64.zip ./*
-          cd ../../
+          cd ./publish/win10-x64
+          zip -r ../../YarnSpinner-win10-x64.zip .
 
       - name: Deploy to NuGet
         if: ${{ startsWith(github.ref, 'refs/tags/v') }}
@@ -75,16 +70,14 @@ jobs:
           path: .github/RELEASE_TEMPLATE.md
 
       - name: Create GitHub Release
-        # 使用 v2 版本的 softprops action
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_name }}
-          name: ${{ github.ref_name }}
           draft: true
           prerelease: true
-          # 组合模板正文和变更日志
           body: |
             ${{ steps.release_preface.outputs.content }}
             ${{ steps.extract-release-notes.outputs.release_notes }}
-          # 绑定最终打好的压缩包供下载
-          files: YarnLanguageServer-win-x64.zip
+          files: |
+            ./YarnSpinner-win10-x64.zip
+          fail_on_unmatched_files: true
+
